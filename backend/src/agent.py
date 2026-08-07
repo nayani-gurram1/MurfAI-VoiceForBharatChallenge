@@ -20,9 +20,7 @@ logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
-# Change this prompt to change what your voice agent does.
-# See README.md for example prompts (customer support, language tutor, receptionist).
-SYSTEM_PROMPT = """You are a patient and encouraging tutor helping students in rural India with reading and basic learning. Speak in a friendly, supportive tone in Indian English. Keep your responses simple, concise, and culturally relevant. Avoid complex formatting, emojis, or symbols."""
+from prompt import SYSTEM_PROMPT
 
 
 class Assistant(Agent):
@@ -127,6 +125,11 @@ async def my_agent(ctx: JobContext):
 
     # Join the room and connect to the user
     await ctx.connect()
+    
+    # Say the first-turn greeting
+    agent_greeting = "Hello there! I am Tara, your reading buddy. What story or words shall we practice reading today?"
+    logger.info(f"Saying greeting: {agent_greeting}")
+    await session.say(agent_greeting, allow_interruptions=True)
 
 
 if __name__ == "__main__":
