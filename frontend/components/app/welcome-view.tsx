@@ -1,4 +1,9 @@
+'use client';
+
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 
 function WelcomeImage() {
   return (
@@ -20,7 +25,7 @@ function WelcomeImage() {
 
 interface WelcomeViewProps {
   startButtonText: string;
-  onStartCall: () => void;
+  onStartCall: () => Promise<void> | void;
 }
 
 export const WelcomeView = ({
@@ -28,21 +33,47 @@ export const WelcomeView = ({
   onStartCall,
   ref,
 }: React.ComponentProps<'div'> & WelcomeViewProps) => {
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const handleStart = async () => {
+    setIsConnecting(true);
+    try {
+      await onStartCall();
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Microphone Access Denied', {
+        description:
+          'Please click the lock icon in your browser address bar to allow microphone access so Tara can hear you read.',
+        duration: 10000,
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
   return (
     <div ref={ref}>
       <section className="bg-background flex flex-col items-center justify-center text-center">
         <WelcomeImage />
 
         <p className="text-foreground max-w-prose pt-1 leading-6 font-medium">
-          Chat live with your voice AI agent
+          Hi! I am Tara, your English reading buddy.
         </p>
 
         <Button
           size="lg"
-          onClick={onStartCall}
+          onClick={handleStart}
+          disabled={isConnecting}
           className="mt-6 w-64 rounded-full font-mono text-xs font-bold tracking-wider uppercase"
         >
-          {startButtonText}
+          {isConnecting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Connecting...
+            </>
+          ) : (
+            startButtonText
+          )}
         </Button>
       </section>
 

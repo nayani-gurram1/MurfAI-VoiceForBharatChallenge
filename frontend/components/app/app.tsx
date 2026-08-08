@@ -41,7 +41,7 @@ export function App({ appConfig }: AppProps) {
   return (
     <AgentSessionProvider session={session}>
       <AppSetup />
-      <main className="grid h-svh grid-cols-1 place-content-center">
+      <main className="w-full min-h-svh">
         <ViewController appConfig={appConfig} />
       </main>
       <StartAudioButton label="Start Audio" />
@@ -53,9 +53,9 @@ export function App({ appConfig }: AppProps) {
         className="toaster group"
         style={
           {
-            '--normal-bg': 'var(--popover)',
-            '--normal-text': 'var(--popover-foreground)',
-            '--normal-border': 'var(--border)',
+            '--normal-bg': 'rgba(10,15,30,0.95)',
+            '--normal-text': '#fff',
+            '--normal-border': 'rgba(255,153,51,0.3)',
           } as React.CSSProperties
         }
       />
