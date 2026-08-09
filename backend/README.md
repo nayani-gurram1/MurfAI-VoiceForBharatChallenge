@@ -227,6 +227,21 @@ backend/
 - [LiveKit Agents Docs](https://docs.livekit.io/agents)
 - [Deepgram Nova-3 Docs](https://developers.deepgram.com)
 
+## Data Sources (Day 5 — The Tools)
+
+This agent uses two tools to fetch domain data for the Learning & Literacy track:
+
+1. **`lookup_word_meaning(word)`** — **LIVE Internet Data**
+   - Source: [Free Dictionary API](https://dictionaryapi.dev)
+   - Real-time HTTP GET request. No API key needed.
+   - Includes timeout handling (5.0s) and graceful spoken fallback when the service is unreachable.
+   - Announces the timestamp (`fetched_at`) when returning definitions to the caller.
+
+2. **`get_reading_exercise(level, topic)`** — **Local Hand-Built Dataset**
+   - File: [`src/exercises.py`](src/exercises.py)
+   - Curated reading exercises for Indian children across 3 difficulty levels (`beginner`, `intermediate`, `advanced`) and 10 topics (`animals`, `fruits`, `colors`, `body`, `numbers`, `school`, `family`, `nature`, `science`, `environment`).
+   - Hand-built dataset because no public API exists for this specific domain requirement.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
