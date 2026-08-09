@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -8,7 +9,9 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    RunContext,
     cli,
+    function_tool,
     inference,
     tokenize,
     room_io,
@@ -21,28 +24,107 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 from prompt import SYSTEM_PROMPT
+from database import lookup_or_create_student, save_student, delete_student
 
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
 
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    @function_tool
+    async def lookup_student(
+        self,
+        context: RunContext,
+        user_id: str,
+    ):
+        """Look up a student by their name or ID in the database.
+        If they are a new student, automatically saves their new record in SQLite!
+        ALWAYS call this tool as soon as the user tells you their name.
+
+        Args:
+            user_id: The student's name (used as their unique identifier).
+        """
+        logger.info(f"Looking up or creating student: {user_id}")
+        profile, is_returning = lookup_or_create_student(user_id)
+
+        topics = ", ".join(profile["topics_covered"]) if profile["topics_covered"] else "basic words"
+        mistakes = ", ".join(profile["common_mistakes"]) if profile["common_mistakes"] else "none"
+
+        if is_returning:
+            return (
+                f"RETURNING STUDENT FOUND IN DATABASE! "
+                f"Name: {profile['name']}, "
+                f"Level: {profile['current_level']}, "
+                f"Topics practiced last time: {topics}, "
+                f"Tricky words: {mistakes}. "
+                f"Greet them back warmly by name: 'Welcome back {profile['name']}! Last time we practiced {topics}. Shall we continue?'"
+            )
+        else:
+            return (
+                f"NEW STUDENT REGISTERED AND SAVED TO DATABASE! "
+                f"Name: {profile['name']}. "
+                f"Greet them warmly for their very first session!"
+            )
+
+    @function_tool
+    async def save_student(
+        self,
+        context: RunContext,
+        user_id: str,
+        name: str,
+        current_level: str,
+        topics_covered: str,
+        common_mistakes: str,
+        language_preference: str = "hinglish",
+    ):
+        """Update a student's learning profile AFTER they give consent.
+
+        Args:
+            user_id: The student's unique identifier (their name in lowercase).
+            name: The student's display name.
+            current_level: The student's reading level (beginner, intermediate, advanced).
+            topics_covered: Comma-separated list of topics practiced.
+            common_mistakes: Comma-separated list of words or sounds they struggle with.
+            language_preference: The student's preferred language mix.
+        """
+        logger.info(f"Updating student profile: {user_id}")
+
+        topics_list = [t.strip() for t in topics_covered.split(",") if t.strip()]
+        mistakes_list = [m.strip() for m in common_mistakes.split(",") if m.strip()]
+
+        result = save_student(
+            user_id=user_id.strip().lower(),
+            name=name,
+            language_preference=language_preference,
+            current_level=current_level,
+            topics_covered=topics_list,
+            common_mistakes=mistakes_list,
+        )
+
+        return (
+            f"Student profile updated in SQLite for {result['name']}! "
+            f"Level: {result['current_level']}, "
+            f"Topics: {', '.join(result['topics_covered'])}."
+        )
+
+    @function_tool
+    async def forget_student(
+        self,
+        context: RunContext,
+        user_id: str,
+    ):
+        """Delete a student's record when they ask to be forgotten.
+
+        Args:
+            user_id: The student's name or ID to delete.
+        """
+        logger.info(f"Deleting student record: {user_id}")
+        deleted = delete_student(user_id.strip().lower())
+
+        if deleted:
+            return f"Done! I have completely deleted all records for '{user_id}' from SQLite."
+        else:
+            return f"No record found for '{user_id}' to delete."
 
 
 server = AgentServer()
@@ -57,57 +139,25 @@ server.setup_fnc = prewarm
 
 @server.rtc_session(agent_name="my-agent")
 async def my_agent(ctx: JobContext):
-    # Logging setup
-    # Add any other context you want in all log entries here
     ctx.log_context_fields = {
         "room": ctx.room.name,
     }
 
-    # Set up a voice AI pipeline using Murf Falcon, Gemini, Deepgram, and the LiveKit turn detector
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt=deepgram.STT(model="nova-3"),
-        # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-        # See all available models at https://docs.livekit.io/agents/models/llm/
+        stt=deepgram.STT(model="nova-3", language="multi"),
         llm=google.LLM(
-                model="gemini-flash-lite-latest",
-            ),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
+            model="gemini-flash-lite-latest",
+        ),
         tts=murf.TTS(
-                voice="en-IN-anisha",
-                tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-                text_pacing=True
-            ),
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
+            voice="en-IN-anisha",
+            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
+            text_pacing=True,
+        ),
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
-        # allow the LLM to generate a response while waiting for the end of turn
-        # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=False,
     )
 
-    # To use a realtime model instead of a voice pipeline, use the following session setup instead.
-    # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
-    # 1. Install livekit-agents[openai]
-    # 2. Set OPENAI_API_KEY in .env.local
-    # 3. Add `from livekit.plugins import openai` to the top of this file
-    # 4. Use the following session setup instead of the version above
-    # session = AgentSession(
-    #     llm=openai.realtime.RealtimeModel(voice="marin")
-    # )
-
-    # # Add a virtual avatar to the session, if desired
-    # # For other providers, see https://docs.livekit.io/agents/models/avatar/
-    # avatar = hedra.AvatarSession(
-    #   avatar_id="...",  # See https://docs.livekit.io/agents/models/avatar/plugins/hedra
-    # )
-    # # Start the avatar and wait for it to join
-    # await avatar.start(session, room=ctx.room)
-
-    # Start the session, which initializes the voice pipeline and warms up the models
     await session.start(
         agent=Assistant(),
         room=ctx.room,
@@ -123,11 +173,12 @@ async def my_agent(ctx: JobContext):
         ),
     )
 
-    # Join the room and connect to the user
     await ctx.connect()
-    
-    # Say the first-turn greeting
-    agent_greeting = "Hello there! I am Tara, your reading buddy. What story or words shall we practice reading today?"
+
+    agent_greeting = (
+        "Hello! I am Tara, your reading buddy. "
+        "What is your name? Tell me your name so I can look you up!"
+    )
     logger.info(f"Saying greeting: {agent_greeting}")
     await session.say(agent_greeting, allow_interruptions=True)
 
