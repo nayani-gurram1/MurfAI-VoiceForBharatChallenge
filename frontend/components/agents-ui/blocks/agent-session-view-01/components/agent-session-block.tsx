@@ -242,12 +242,14 @@ export function AgentSessionView_01({
         className="absolute inset-x-3 bottom-0 z-50 md:inset-x-12"
       >
         {/* Agent State Indicator */}
-        <div className="pointer-events-none mx-auto block w-full max-w-2xl pb-4 text-center text-sm font-semibold text-muted-foreground">
+        <div className="text-muted-foreground pointer-events-none mx-auto block w-full max-w-2xl pb-4 text-center text-sm font-semibold">
           {agentState === 'listening' && 'Listening to you...'}
           {agentState === 'speaking' && 'Tara is speaking'}
           {agentState === 'thinking' && 'Tara is thinking...'}
           {agentState === 'connecting' && 'Connecting to Tara...'}
-          {(agentState === 'connected' || !agentState) && messages.length === 0 && 'Tara is ready. Try reading a word!'}
+          {(agentState === 'connected' || !agentState) &&
+            messages.length === 0 &&
+            'Tara is ready. Try reading a word!'}
         </div>
         <div className="bg-background relative mx-auto max-w-2xl pb-3 md:pb-12">
           <Fade bottom className="absolute inset-x-0 top-0 h-4 -translate-y-full" />

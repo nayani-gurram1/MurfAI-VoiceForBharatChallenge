@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface TaraWelcomeProps {
   onStartCall: () => Promise<void> | void;
@@ -16,12 +16,25 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
     try {
       await onStartCall();
     } catch (err: unknown) {
-      console.error(err);
-      toast.error('Microphone Access Denied', {
-        description:
-          'Please click the lock icon in your browser address bar and allow microphone access so Tara can hear you read!',
-        duration: 12000,
-      });
+      console.error('Error starting call:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (
+        errMsg.toLowerCase().includes('permission') ||
+        errMsg.toLowerCase().includes('notallowed') ||
+        errMsg.toLowerCase().includes('user denied') ||
+        errMsg.toLowerCase().includes('media')
+      ) {
+        toast.error('Microphone Access Denied', {
+          description:
+            'Please click the lock icon in your browser address bar and allow microphone access so Tara can hear you read!',
+          duration: 12000,
+        });
+      } else {
+        toast.error('Call Connection Failed', {
+          description: `${errMsg || 'Token expired or room closed'}. Please generate a fresh outbound link in your terminal.`,
+          duration: 12000,
+        });
+      }
       setIsConnecting(false);
     }
   };
@@ -34,15 +47,36 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
       <div className="blob blob-3" />
 
       {/* Floating decorative elements */}
-      <div className="floating-letter" style={{ top: '12%', left: '8%', animationDelay: '0s' }}>A</div>
-      <div className="floating-letter" style={{ top: '20%', right: '10%', animationDelay: '0.8s' }}>B</div>
-      <div className="floating-letter" style={{ top: '60%', left: '5%', animationDelay: '1.6s' }}>क</div>
-      <div className="floating-letter" style={{ top: '70%', right: '7%', animationDelay: '0.4s' }}>ख</div>
-      <div className="floating-letter" style={{ top: '40%', left: '3%', animationDelay: '2s' }}>C</div>
-      <div className="floating-letter" style={{ bottom: '20%', right: '4%', animationDelay: '1.2s' }}>ग</div>
-      <div className="floating-star" style={{ top: '15%', left: '25%', animationDelay: '0.3s' }}>✦</div>
-      <div className="floating-star" style={{ top: '25%', right: '25%', animationDelay: '1s' }}>✦</div>
-      <div className="floating-star" style={{ bottom: '30%', left: '20%', animationDelay: '1.8s' }}>✦</div>
+      <div className="floating-letter" style={{ top: '12%', left: '8%', animationDelay: '0s' }}>
+        A
+      </div>
+      <div className="floating-letter" style={{ top: '20%', right: '10%', animationDelay: '0.8s' }}>
+        B
+      </div>
+      <div className="floating-letter" style={{ top: '60%', left: '5%', animationDelay: '1.6s' }}>
+        क
+      </div>
+      <div className="floating-letter" style={{ top: '70%', right: '7%', animationDelay: '0.4s' }}>
+        ख
+      </div>
+      <div className="floating-letter" style={{ top: '40%', left: '3%', animationDelay: '2s' }}>
+        C
+      </div>
+      <div
+        className="floating-letter"
+        style={{ bottom: '20%', right: '4%', animationDelay: '1.2s' }}
+      >
+        ग
+      </div>
+      <div className="floating-star" style={{ top: '15%', left: '25%', animationDelay: '0.3s' }}>
+        ✦
+      </div>
+      <div className="floating-star" style={{ top: '25%', right: '25%', animationDelay: '1s' }}>
+        ✦
+      </div>
+      <div className="floating-star" style={{ bottom: '30%', left: '20%', animationDelay: '1.8s' }}>
+        ✦
+      </div>
 
       <div className="tara-card">
         {/* Badge */}
@@ -62,7 +96,8 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
         <h1 className="tara-title">Tara</h1>
         <p className="tara-subtitle">Aapki English Reading Buddy</p>
         <p className="tara-desc">
-          Practice reading English words in a fun, safe, and encouraging way.<br />
+          Practice reading English words in a fun, safe, and encouraging way.
+          <br />
           Tara speaks Hinglish — just like you!
         </p>
 
@@ -82,7 +117,10 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
         >
           {isConnecting ? (
             <>
-              <Loader2 className="animate-spin" style={{ width: 20, height: 20, display: 'inline', marginRight: 8 }} />
+              <Loader2
+                className="animate-spin"
+                style={{ width: 20, height: 20, display: 'inline', marginRight: 8 }}
+              />
               Connecting to Tara...
             </>
           ) : (
@@ -95,7 +133,8 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
 
         {/* Mic tip */}
         <p className="tara-mic-tip">
-          🎤 Microphone access required · <span style={{ color: '#FF9933' }}>Hindi + English</span> supported
+          🎤 Microphone access required · <span style={{ color: '#FF9933' }}>Hindi + English</span>{' '}
+          supported
         </p>
       </div>
 

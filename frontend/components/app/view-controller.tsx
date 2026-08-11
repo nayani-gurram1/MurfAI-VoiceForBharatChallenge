@@ -3,8 +3,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
-import { TaraWelcome } from '@/components/app/tara-welcome';
 import { TaraSessionView } from '@/components/app/tara-session';
+import { TaraWelcome } from '@/components/app/tara-welcome';
 
 const VIEW_MOTION_PROPS = {
   variants: {
@@ -27,12 +27,20 @@ export function ViewController({ appConfig }: ViewControllerProps) {
   return (
     <AnimatePresence mode="wait">
       {!isConnected && (
-        <motion.div key="welcome" {...VIEW_MOTION_PROPS} style={{ width: '100%', minHeight: '100svh' }}>
+        <motion.div
+          key="welcome"
+          {...VIEW_MOTION_PROPS}
+          style={{ width: '100%', minHeight: '100svh' }}
+        >
           <TaraWelcome onStartCall={start} />
         </motion.div>
       )}
       {isConnected && (
-        <motion.div key="session" {...VIEW_MOTION_PROPS} style={{ width: '100%', minHeight: '100svh' }}>
+        <motion.div
+          key="session"
+          {...VIEW_MOTION_PROPS}
+          style={{ width: '100%', minHeight: '100svh' }}
+        >
           <TaraSessionView />
         </motion.div>
       )}

@@ -6,7 +6,14 @@ import { useAgent, useSessionContext, useSessionMessages } from '@livekit/compon
 import { AgentChatTranscript } from '@/components/agents-ui/agent-chat-transcript';
 import { AgentControlBar } from '@/components/agents-ui/agent-control-bar';
 
-type AgentState = 'connecting' | 'connected' | 'listening' | 'thinking' | 'speaking' | 'disconnected' | undefined;
+type AgentState =
+  | 'connecting'
+  | 'connected'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'disconnected'
+  | undefined;
 
 function getStateLabel(agentState: AgentState, messageCount: number): string {
   if (agentState === 'connecting') return 'Connecting to Tara...';

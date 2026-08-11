@@ -28,6 +28,24 @@ interface AppProps {
 
 export function App({ appConfig }: AppProps) {
   const tokenSource = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const token = searchParams.get('token');
+      const room = searchParams.get('room');
+      if (token && room) {
+        const livekitUrl =
+          process.env.NEXT_PUBLIC_LIVEKIT_URL ||
+          'wss://voice-for-bharat-challenge-2026-0lehm9tv.livekit.cloud';
+        return TokenSource.custom(async () => {
+          return {
+            serverUrl: livekitUrl,
+            roomName: room,
+            participantName: 'user',
+            participantToken: token,
+          };
+        });
+      }
+    }
     return typeof process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT === 'string'
       ? getSandboxTokenSource(appConfig)
       : TokenSource.endpoint('/api/token');
@@ -41,7 +59,7 @@ export function App({ appConfig }: AppProps) {
   return (
     <AgentSessionProvider session={session}>
       <AppSetup />
-      <main className="w-full min-h-svh">
+      <main className="min-h-svh w-full">
         <ViewController appConfig={appConfig} />
       </main>
       <StartAudioButton label="Start Audio" />
