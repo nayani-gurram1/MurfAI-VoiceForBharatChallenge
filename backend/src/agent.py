@@ -1,6 +1,6 @@
 import logging
+
 from dotenv import load_dotenv
-from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentServer,
@@ -11,25 +11,31 @@ from livekit.agents import (
     cli,
     function_tool,
     tokenize,
-    room_io,
 )
-from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
+from livekit.plugins import deepgram, google, murf, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+from database import (
+    delete_student,
+    lookup_or_create_student,
+    save_student,
+)
+from database import (
+    opt_out_student as db_opt_out_student,
+)
+from prompt import SYSTEM_PROMPT
+from tools import fetch_reading_exercise, lookup_word_meaning
 
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
-
-from prompt import SYSTEM_PROMPT
-from database import lookup_or_create_student, save_student, delete_student
-from tools import fetch_reading_exercise, lookup_word_meaning
 
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
 
-    # ── Day 4: Memory tools ───────────────────────────────────────────────
+    # ── Day 4 & Day 6: Memory & Opt-out tools ────────────────────────────
 
     @function_tool
     async def lookup_student(
@@ -46,21 +52,49 @@ class Assistant(Agent):
         logger.info(f"Looking up or creating student: {user_id}")
         profile, is_returning = lookup_or_create_student(user_id)
 
-        topics = ", ".join(profile["topics_covered"]) if profile["topics_covered"] else "basic words and phonics practice"
-        mistakes = ", ".join(profile["common_mistakes"]) if profile["common_mistakes"] else "none"
+        if profile.get("opted_out"):
+            return (
+                f"STUDENT OPTED OUT! Name: {profile['name']}. "
+                f"Inform them politely that they have opted out of automated calls."
+            )
+
+        topics = (
+            ", ".join(profile["topics_covered"])
+            if profile["topics_covered"]
+            else "basic words and phonics practice"
+        )
+        mistakes = (
+            ", ".join(profile["common_mistakes"])
+            if profile["common_mistakes"]
+            else "none"
+        )
 
         if is_returning:
             return (
                 f"RETURNING STUDENT FOUND IN DATABASE! "
                 f"Name: {profile['name']}, Level: {profile['current_level']}, "
                 f"Topics practiced last time: {topics}, Tricky words: {mistakes}. "
-                f"Greet them warmly by name: 'Welcome back {profile['name']}! "
+                f"Greet them warmly: 'नमस्ते! Welcome back {profile['name']}! "
                 f"Last time we practiced {topics}.'"
             )
         return (
             f"NEW STUDENT REGISTERED! Name: {profile['name']}. "
             f"Greet them warmly for their very first session!"
         )
+
+    @function_tool
+    async def opt_out_student(self, context: RunContext, user_id: str):
+        """Opt out a student from receiving daily outbound practice calls.
+        Call this when the user says 'stop calling me', 'opt out', or 'un-subscribe'.
+
+        Args:
+            user_id: The student's name or ID.
+        """
+        logger.info(f"Opting out student from daily calls: {user_id}")
+        success = db_opt_out_student(user_id.strip().lower())
+        if success:
+            return f"Success! {user_id} has been unsubscribed from all daily outbound calls."
+        return f"Could not find an active subscription for {user_id}, but marked as opted out."
 
     @function_tool
     async def save_student(
@@ -122,9 +156,8 @@ class Assistant(Agent):
         topic: str,
     ):
         """Fetch a reading exercise (word + sentence) for the student to practice.
-        Call this when the student asks for a new word to practice, wants an exercise,
+        Call this when the student asks for a new word, agrees to practice ('okay', 'yes', 'sure', 'haan'),
         says 'give me a word', 'let's practice', 'mujhe ek word do', or 'what should I read?'.
-        Data source: hand-built local dataset (no public API exists for Indian children's literacy exercises).
 
         Args:
             level: Student's reading level — 'beginner', 'intermediate', or 'advanced'.
@@ -134,7 +167,9 @@ class Assistant(Agent):
         exercise = await fetch_reading_exercise(level, topic)
 
         if exercise.get("error"):
-            return f"Sorry, I couldn't find an exercise right now. {exercise['message']}"
+            return (
+                f"Sorry, I couldn't find an exercise right now. {exercise['message']}"
+            )
 
         return (
             f"Exercise ready! "
@@ -154,8 +189,6 @@ class Assistant(Agent):
     ):
         """Look up the real meaning, pronunciation, and an example sentence for any English word
         using the live Free Dictionary API (dictionaryapi.dev).
-        Call this when the student asks 'what does X mean?', 'what is X?', or is curious about a word's meaning.
-        This tool uses LIVE internet data — always tell the student when the data was fetched.
 
         Args:
             word: The English word to look up (e.g. 'cat', 'elephant', 'river', 'teacher').
@@ -164,11 +197,14 @@ class Assistant(Agent):
         result = await lookup_word_meaning(word)
 
         if result.get("error"):
-            # Graceful spoken fallback — never go silent
             return result["message"]
 
         phonetic = f" (said as: {result['phonetic']})" if result.get("phonetic") else ""
-        part = f" It is a {result['part_of_speech']}." if result.get("part_of_speech") else ""
+        part = (
+            f" It is a {result['part_of_speech']}."
+            if result.get("part_of_speech")
+            else ""
+        )
         example = f" Example: {result['example']}" if result.get("example") else ""
 
         return (
@@ -194,7 +230,7 @@ async def my_agent(ctx: JobContext):
 
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="multi"),
-        llm=google.LLM(model="gemini-2.5-flash"),
+        llm=google.LLM(model="gemini-flash-lite-latest"),
         tts=murf.TTS(
             voice="en-IN-anisha",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=1),
@@ -202,30 +238,36 @@ async def my_agent(ctx: JobContext):
         ),
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
-        preemptive_generation=False,
+        preemptive_generation=True,
     )
 
     await session.start(
         agent=Assistant(),
         room=ctx.room,
-        room_options=room_io.RoomOptions(
-            audio_input=room_io.AudioInputOptions(
-                noise_cancellation=lambda params: (
-                    noise_cancellation.BVCTelephony()
-                    if params.participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
-                    else noise_cancellation.BVC()
-                ),
-            ),
-        ),
     )
 
     await ctx.connect()
 
-    # Immediate initial greeting
-    await session.say(
-        "Hello! I am Tara, your reading buddy. Tell me your name so I can look you up!",
-        allow_interruptions=True,
+    # Determine if this is an outbound call (SIP participant or room metadata)
+    is_outbound = "outbound" in ctx.room.name.lower() or (
+        ctx.room.metadata.startswith("{") and "outbound" in ctx.room.metadata
     )
+
+    if is_outbound:
+        # Mandatory Day 6 Outbound Call Opening (Who, Why, How to Opt Out)
+        await session.say(
+            "नमस्ते! This is Tara calling from VoiceForBharat Education. "
+            "This is your scheduled daily 2-minute English reading practice call! "
+            "If you don't want to receive these daily calls, just say 'stop calling me' or 'opt out'. "
+            "What is your name so we can start today's practice?",
+            allow_interruptions=True,
+        )
+    else:
+        # Standard Inbound Opening
+        await session.say(
+            "Hello! I am Tara, your reading buddy. Tell me your name so I can look you up!",
+            allow_interruptions=True,
+        )
 
 
 if __name__ == "__main__":

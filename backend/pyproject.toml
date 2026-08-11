@@ -13,6 +13,7 @@ dependencies = [
     "livekit-agents[deepgram,google,silero,turn-detector]~=1.4",
     "livekit-murf>=0.1.1",
     "livekit-plugins-noise-cancellation~=0.2",
+    "livekit-plugins-openai>=1.4.5",
     "python-dotenv",
 ]
 
@@ -30,6 +31,7 @@ where = ["src"]
 "" = "src"
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 

@@ -1,8 +1,8 @@
 import asyncio
-import os
-from livekit.plugins import google
-from livekit.agents import llm as llm_module
+
 from dotenv import load_dotenv
+from livekit.agents import llm as llm_module
+from livekit.plugins import google
 
 load_dotenv(".env.local")
 
@@ -17,16 +17,17 @@ MODELS_TO_TEST = [
     "gemini-2.5-pro",
 ]
 
-async def test_model(model_name):
+
+async def _check_model(model_name):
     try:
         llm = google.LLM(model=model_name)
         chat_ctx = llm_module.ChatContext()
-        chat_ctx.append(text="Hi", role="user")
+        chat_ctx.add_message(role="user", content="Hi")
         stream = llm.chat(chat_ctx=chat_ctx)
-        
-        async for chunk in stream:
-            pass # Just consume to see if it errors
-            
+
+        async for _chunk in stream:
+            pass  # Just consume to see if it errors
+
         print(f"[SUCCESS] {model_name} works!")
         return model_name
     except Exception as e:
@@ -39,19 +40,21 @@ async def test_model(model_name):
             print(f"[FAILED] {model_name}: {err_str}")
     return None
 
+
 async def main():
     working_models = []
     print("Testing models...")
     for model in MODELS_TO_TEST:
-        res = await test_model(model)
+        res = await _check_model(model)
         if res:
             working_models.append(res)
-    
+
     print("\n--- RESULTS ---")
     if working_models:
         print(f"Working models: {working_models}")
     else:
         print("NO MODELS WORKING (ALL RATE LIMITED OR NOT FOUND)")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

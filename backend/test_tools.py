@@ -1,5 +1,7 @@
 import asyncio
+
 from tools import fetch_reading_exercise, lookup_word_meaning
+
 
 async def test():
     print("=== Exercise Tool (Local Dataset) ===")
@@ -13,5 +15,6 @@ async def test():
     print("=== Graceful Failure Test ===")
     bad = await lookup_word_meaning("xyznonexistentword123")
     print(bad)
+
 
 asyncio.run(test())

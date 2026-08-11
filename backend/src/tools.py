@@ -6,7 +6,6 @@ Tool 2: lookup_word_meaning     — calls the FREE Dictionary API (dictionaryapi
                                   Real internet data, no API key needed.
 """
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 

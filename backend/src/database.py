@@ -1,14 +1,17 @@
 """
 SQLite database for Tara's student memory.
 Stores student profiles for the Learning & Literacy track.
+Includes Day 6 Outbound Call preferences and Opt-Out handling.
 """
 
 import json
-import sqlite3
 import os
+import sqlite3
 from datetime import datetime, timezone
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tara_memory.db")
+DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "tara_memory.db"
+)
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -17,20 +20,29 @@ def _get_connection() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("""
         CREATE TABLE IF NOT EXISTS students (
-            user_id         TEXT PRIMARY KEY,
-            name            TEXT NOT NULL,
-            language_pref   TEXT DEFAULT 'hinglish',
-            current_level   TEXT DEFAULT 'beginner',
-            topics_covered  TEXT DEFAULT '["basic words", "phonics"]',
-            common_mistakes TEXT DEFAULT '[]',
-            last_interaction TEXT
+            user_id          TEXT PRIMARY KEY,
+            name             TEXT NOT NULL,
+            language_pref    TEXT DEFAULT 'hinglish',
+            current_level    TEXT DEFAULT 'beginner',
+            topics_covered   TEXT DEFAULT '["basic words", "phonics"]',
+            common_mistakes  TEXT DEFAULT '[]',
+            last_interaction TEXT,
+            opted_out        INTEGER DEFAULT 0
         )
     """)
+    # Migration: check if opted_out column exists
+    cursor = conn.execute("PRAGMA table_info(students)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "opted_out" not in columns:
+        conn.execute("ALTER TABLE students ADD COLUMN opted_out INTEGER DEFAULT 0")
+
     conn.commit()
     return conn
 
 
-def lookup_or_create_student(user_id: str, display_name: str | None = None) -> tuple[dict, bool]:
+def lookup_or_create_student(
+    user_id: str, display_name: str | None = None
+) -> tuple[dict, bool]:
     """Look up a student by user_id. If not found, automatically creates and saves a new student record.
     Returns (student_dict, is_returning_boolean).
     """
@@ -59,6 +71,7 @@ def lookup_or_create_student(user_id: str, display_name: str | None = None) -> t
                 "topics_covered": json.loads(row["topics_covered"]),
                 "common_mistakes": json.loads(row["common_mistakes"]),
                 "last_interaction": now,
+                "opted_out": bool(row["opted_out"]),
             }, True
 
         # New student! Auto-create and save record in SQLite database
@@ -67,10 +80,16 @@ def lookup_or_create_student(user_id: str, display_name: str | None = None) -> t
         conn.execute(
             """
             INSERT INTO students (user_id, name, language_pref, current_level,
-                                  topics_covered, common_mistakes, last_interaction)
-            VALUES (?, ?, 'hinglish', 'beginner', ?, ?, ?)
+                                  topics_covered, common_mistakes, last_interaction, opted_out)
+            VALUES (?, ?, 'hinglish', 'beginner', ?, ?, ?, 0)
             """,
-            (clean_id, name, json.dumps(default_topics), json.dumps(default_mistakes), now),
+            (
+                clean_id,
+                name,
+                json.dumps(default_topics),
+                json.dumps(default_mistakes),
+                now,
+            ),
         )
         conn.commit()
 
@@ -82,6 +101,7 @@ def lookup_or_create_student(user_id: str, display_name: str | None = None) -> t
             "topics_covered": default_topics,
             "common_mistakes": default_mistakes,
             "last_interaction": now,
+            "opted_out": False,
         }, False
     finally:
         conn.close()
@@ -106,14 +126,14 @@ def save_student(
         conn.execute(
             """
             INSERT INTO students (user_id, name, language_pref, current_level,
-                                  topics_covered, common_mistakes, last_interaction)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                  topics_covered, common_mistakes, last_interaction, opted_out)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
             ON CONFLICT(user_id) DO UPDATE SET
-                name            = excluded.name,
-                language_pref   = excluded.language_pref,
-                current_level   = excluded.current_level,
-                topics_covered  = excluded.topics_covered,
-                common_mistakes = excluded.common_mistakes,
+                name             = excluded.name,
+                language_pref    = excluded.language_pref,
+                current_level    = excluded.current_level,
+                topics_covered   = excluded.topics_covered,
+                common_mistakes  = excluded.common_mistakes,
                 last_interaction = excluded.last_interaction
             """,
             (clean_id, name, language_preference, current_level, topics, mistakes, now),
@@ -130,7 +150,37 @@ def save_student(
         "topics_covered": topics_covered or [],
         "common_mistakes": common_mistakes or [],
         "last_interaction": now,
+        "opted_out": False,
     }
+
+
+def opt_out_student(user_id: str) -> bool:
+    """Opt-out a student from daily outbound practice calls."""
+    clean_id = user_id.strip().lower()
+    conn = _get_connection()
+    try:
+        cursor = conn.execute(
+            "UPDATE students SET opted_out = 1 WHERE user_id = ?", (clean_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def is_opted_out(user_id: str) -> bool:
+    """Check if a student has opted out of outbound calls."""
+    clean_id = user_id.strip().lower()
+    conn = _get_connection()
+    try:
+        row = conn.execute(
+            "SELECT opted_out FROM students WHERE user_id = ?", (clean_id,)
+        ).fetchone()
+        if row:
+            return bool(row["opted_out"])
+        return False
+    finally:
+        conn.close()
 
 
 def delete_student(user_id: str) -> bool:
