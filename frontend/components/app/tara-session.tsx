@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAgent, useSessionContext, useSessionMessages } from '@livekit/components-react';
 import { AgentChatTranscript } from '@/components/agents-ui/agent-chat-transcript';
@@ -65,8 +66,17 @@ export function TaraSessionView() {
           <span className="session-brand-name">Tara</span>
           <span className="session-brand-sub">Reading Buddy</span>
         </div>
-        <div className="session-powered">
-          Powered by <strong>Murf Falcon</strong>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/escalations"
+            target="_blank"
+            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/60 font-semibold transition flex items-center gap-1.5"
+          >
+            <span>👩‍🏫</span> Human Help Desk (Day 7)
+          </Link>
+          <div className="session-powered">
+            Powered by <strong>Murf Falcon</strong>
+          </div>
         </div>
       </div>
 

@@ -6,6 +6,8 @@ Includes Day 6 Outbound Call preferences and Opt-Out handling.
 
 import json
 import os
+import random
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -28,6 +30,20 @@ def _get_connection() -> sqlite3.Connection:
             common_mistakes  TEXT DEFAULT '[]',
             last_interaction TEXT,
             opted_out        INTEGER DEFAULT 0
+        )
+    """)
+    # Day 7: Human help escalations table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS escalations (
+            ref_id       TEXT PRIMARY KEY,
+            user_id      TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            reason       TEXT NOT NULL,
+            urgency      TEXT DEFAULT 'medium',
+            summary      TEXT NOT NULL,
+            user_consent INTEGER DEFAULT 1,
+            status       TEXT DEFAULT 'open',
+            created_at   TEXT NOT NULL
         )
     """)
     # Migration: check if opted_out column exists
@@ -193,3 +209,162 @@ def delete_student(user_id: str) -> bool:
         return cursor.rowcount > 0
     finally:
         conn.close()
+
+
+# ── Day 7: Human Help & Escalation Functions ─────────────────────────
+
+
+def sanitize_summary(summary: str) -> str:
+    """Redact sensitive PII (passwords, OTPs, PINs, phone numbers, card numbers) from summary."""
+    clean = summary
+    # Passwords / OTP / PIN patterns
+    clean = re.sub(
+        r"\b(password|pwd|otp|pin|cvv)\s*[:=]\s*\S+",
+        r"\1: [REDACTED]",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    # 4-6 digit numeric OTPs
+    clean = re.sub(r"\b\d{4,6}\b", "[REDACTED_NUMERIC]", clean)
+    # 16-digit card numbers
+    clean = re.sub(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b", "[REDACTED_CARD]", clean)
+    return clean
+
+
+def create_escalation_request(
+    user_id: str,
+    student_name: str,
+    reason: str,
+    urgency: str = "medium",
+    summary: str = "",
+    user_consent: bool = True,
+) -> dict:
+    """Create or update a human help request ticket in SQLite.
+    Prevents duplicate open tickets for the same user and reason.
+    """
+    clean_id = user_id.strip().lower()
+    clean_urgency = urgency.lower() if urgency.lower() in ["low", "medium", "high", "emergency"] else "medium"
+    sanitized = sanitize_summary(summary)
+    now = datetime.now(timezone.utc).isoformat()
+
+    conn = _get_connection()
+    try:
+        # Prevent duplicate open requests for the same student & reason
+        existing = conn.execute(
+            """
+            SELECT * FROM escalations
+            WHERE user_id = ? AND reason = ? AND status = 'open'
+            """,
+            (clean_id, reason),
+        ).fetchone()
+
+        if existing:
+            # Update existing open ticket
+            ref_id = existing["ref_id"]
+            updated_summary = f"{existing['summary']} | Follow-up update: {sanitized}"
+            conn.execute(
+                """
+                UPDATE escalations
+                SET summary = ?, urgency = ?, created_at = ?, user_consent = ?
+                WHERE ref_id = ?
+                """,
+                (updated_summary, clean_urgency, now, 1 if user_consent else 0, ref_id),
+            )
+            conn.commit()
+            return {
+                "ref_id": ref_id,
+                "user_id": clean_id,
+                "student_name": student_name,
+                "reason": reason,
+                "urgency": clean_urgency,
+                "summary": updated_summary,
+                "status": "open",
+                "user_consent": user_consent,
+                "is_duplicate_updated": True,
+                "created_at": now,
+            }
+
+        # Create new escalation ticket
+        ref_id = f"ESC-{random.randint(1000, 9999)}"
+        conn.execute(
+            """
+            INSERT INTO escalations (ref_id, user_id, student_name, reason, urgency, summary, user_consent, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)
+            """,
+            (
+                ref_id,
+                clean_id,
+                student_name,
+                reason,
+                clean_urgency,
+                sanitized,
+                1 if user_consent else 0,
+                now,
+            ),
+        )
+        conn.commit()
+
+        return {
+            "ref_id": ref_id,
+            "user_id": clean_id,
+            "student_name": student_name,
+            "reason": reason,
+            "urgency": clean_urgency,
+            "summary": sanitized,
+            "status": "open",
+            "user_consent": user_consent,
+            "is_duplicate_updated": False,
+            "created_at": now,
+        }
+    finally:
+        conn.close()
+
+
+def get_open_escalations() -> list[dict]:
+    """Retrieve all open human escalation requests for teacher/admin dashboard."""
+    conn = _get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM escalations WHERE status = 'open' ORDER BY created_at DESC"
+        ).fetchall()
+        return [
+            {
+                "ref_id": r["ref_id"],
+                "user_id": r["user_id"],
+                "student_name": r["student_name"],
+                "reason": r["reason"],
+                "urgency": r["urgency"],
+                "summary": r["summary"],
+                "user_consent": bool(r["user_consent"]),
+                "status": r["status"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def get_escalation_by_id(ref_id: str) -> dict | None:
+    """Retrieve an escalation request by its reference ID."""
+    conn = _get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM escalations WHERE ref_id = ?", (ref_id.strip().upper(),)
+        ).fetchone()
+        if row:
+            return {
+                "ref_id": row["ref_id"],
+                "user_id": row["user_id"],
+                "student_name": row["student_name"],
+                "reason": row["reason"],
+                "urgency": row["urgency"],
+                "summary": row["summary"],
+                "user_consent": bool(row["user_consent"]),
+                "status": row["status"],
+                "created_at": row["created_at"],
+            }
+        return None
+    finally:
+        conn.close()
+

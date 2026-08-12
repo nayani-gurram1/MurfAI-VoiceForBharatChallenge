@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -130,6 +131,14 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
             </>
           )}
         </button>
+
+        {/* Day 7 Help Desk Link */}
+        <Link
+          href="/escalations"
+          className="block text-center text-xs text-neutral-400 hover:text-indigo-400 font-medium py-1 transition"
+        >
+          👩‍🏫 Teacher Help Desk (Day 7 Open Escalations) →
+        </Link>
 
         {/* Mic tip */}
         <p className="tara-mic-tip">

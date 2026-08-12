@@ -16,6 +16,7 @@ from livekit.plugins import deepgram, google, murf, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from database import (
+    create_escalation_request,
     delete_student,
     lookup_or_create_student,
     save_student,
@@ -213,6 +214,59 @@ class Assistant(Agent):
             f"Source: {result['data_source']}."
         )
 
+    # ── Day 7: Human Help & Escalation tool ──────────────────────────────
+
+    @function_tool
+    async def create_escalation(
+        self,
+        context: RunContext,
+        user_id: str,
+        student_name: str,
+        reason: str,
+        urgency: str = "medium",
+        summary: str = "",
+        user_consent: bool = True,
+    ):
+        """Create a human help request ticket for a student needing human assistance.
+        ONLY call this after asking for explicit permission from the student and receiving consent.
+
+        Args:
+            user_id: Student ID or handle.
+            student_name: Student display name.
+            reason: Reason for human help ('frustrated_learner' or 'teacher_assistance_requested').
+            urgency: Urgency level ('low', 'medium', 'high', or 'emergency').
+            summary: Short summary (Who, What happened, What was checked, Urgency). NO passwords or PII!
+            user_consent: True if student explicitly granted permission, False otherwise.
+        """
+        logger.info(
+            f"Creating escalation for {student_name} ({user_id}) - Reason: {reason}, Consent: {user_consent}"
+        )
+        if not user_consent:
+            return "Consent was NOT granted by the student. No human help request was created."
+
+        result = create_escalation_request(
+            user_id=user_id,
+            student_name=student_name,
+            reason=reason,
+            urgency=urgency,
+            summary=summary,
+            user_consent=user_consent,
+        )
+
+        ref_id = result["ref_id"]
+        if result.get("is_duplicate_updated"):
+            return (
+                f"Existing request updated! Reference ID: {ref_id}. "
+                f"Inform the user: 'I updated your existing request ({ref_id}) for a VoiceForBharat teacher. "
+                f"A teacher will review this within 24 to 48 hours. In the meantime, we can keep practicing!'"
+            )
+
+        return (
+            f"Human help request created! Reference ID: {ref_id}. "
+            f"Inform the user: 'I have submitted your request (Reference ID: {ref_id}) to the VoiceForBharat teacher support team. "
+            f"A teacher will review it within 24 to 48 hours. In the meantime, we can continue practicing whenever you feel ready!'"
+        )
+
 
 server = AgentServer()
 
@@ -241,16 +295,17 @@ async def my_agent(ctx: JobContext):
         preemptive_generation=True,
     )
 
+    await ctx.connect()
+
     await session.start(
         agent=Assistant(),
         room=ctx.room,
     )
 
-    await ctx.connect()
-
     # Determine if this is an outbound call (SIP participant or room metadata)
-    is_outbound = "outbound" in ctx.room.name.lower() or (
-        ctx.room.metadata.startswith("{") and "outbound" in ctx.room.metadata
+    is_outbound = (
+        "outbound" in ctx.room.name.lower()
+        or (ctx.room.metadata and "outbound" in ctx.room.metadata.lower())
     )
 
     if is_outbound:
@@ -265,7 +320,7 @@ async def my_agent(ctx: JobContext):
     else:
         # Standard Inbound Opening
         await session.say(
-            "Hello! I am Tara, your reading buddy. Tell me your name so I can look you up!",
+            "नमस्ते! Hello! I am Tara, your reading buddy from VoiceForBharat. Tell me your name so I can look you up!",
             allow_interruptions=True,
         )
 

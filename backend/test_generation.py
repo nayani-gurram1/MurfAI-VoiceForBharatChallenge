@@ -10,7 +10,7 @@ load_dotenv(".env.local")
 async def main():
     try:
         print("Testing Google LLM generation...")
-        llm = google.LLM(model="gemini-2.5-flash")
+        llm = google.LLM(model="gemini-flash-lite-latest")
         chat_ctx = llm_module.ChatContext()
         chat_ctx.append(text="Say hello!", role="user")
 
