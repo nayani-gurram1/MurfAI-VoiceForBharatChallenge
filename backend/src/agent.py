@@ -1,4 +1,5 @@
 import logging
+import time
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -19,7 +20,10 @@ from database import (
     create_escalation_request,
     delete_student,
     lookup_or_create_student,
+    record_call_end,
+    record_call_start,
     save_student,
+    update_call_student,
 )
 from database import (
     opt_out_student as db_opt_out_student,
@@ -33,8 +37,13 @@ load_dotenv(".env.local")
 
 
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, room_name: str = "anonymous") -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
+        self.room_name = room_name
+        self.exercises_completed = 0
+        self.was_opted_out = False
+        self.identified_user = "anonymous"
+        self.identified_name = "Learner"
 
     # ── Day 4 & Day 6: Memory & Opt-out tools ────────────────────────────
 
@@ -52,6 +61,9 @@ class Assistant(Agent):
         """
         logger.info(f"Looking up or creating student: {user_id}")
         profile, is_returning = lookup_or_create_student(user_id)
+        self.identified_user = profile["user_id"]
+        self.identified_name = profile["name"]
+        update_call_student(self.room_name, self.identified_user, self.identified_name)
 
         if profile.get("opted_out"):
             return (
@@ -92,6 +104,7 @@ class Assistant(Agent):
             user_id: The student's name or ID.
         """
         logger.info(f"Opting out student from daily calls: {user_id}")
+        self.was_opted_out = True
         success = db_opt_out_student(user_id.strip().lower())
         if success:
             return f"Success! {user_id} has been unsubscribed from all daily outbound calls."
@@ -171,6 +184,8 @@ class Assistant(Agent):
             return (
                 f"Sorry, I couldn't find an exercise right now. {exercise['message']}"
             )
+
+        self.exercises_completed += 1
 
         return (
             f"Exercise ready! "
@@ -281,6 +296,10 @@ server.setup_fnc = prewarm
 @server.rtc_session(agent_name="my-agent")
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
+    start_time = time.time()
+    room_name = ctx.room.name
+
+    assistant = Assistant(room_name=room_name)
 
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="multi"),
@@ -297,15 +316,52 @@ async def my_agent(ctx: JobContext):
 
     await ctx.connect()
 
-    await session.start(
-        agent=Assistant(),
-        room=ctx.room,
+    # Determine channel & direction
+    has_sip = any(
+        getattr(p, "kind", None) == "participant_kind_sip"
+        for p in ctx.room.remote_participants.values()
+    )
+    channel = "sip" if has_sip else "browser"
+
+    is_outbound = "outbound" in room_name.lower() or (
+        ctx.room.metadata and "outbound" in ctx.room.metadata.lower()
+    )
+    direction = "outbound" if is_outbound else "inbound"
+
+    # Record Call Start in SQLite
+    record_call_start(
+        call_id=room_name,
+        user_id="anonymous",
+        student_name="Learner",
+        channel=channel,
+        direction=direction,
     )
 
-    # Determine if this is an outbound call (SIP participant or room metadata)
-    is_outbound = (
-        "outbound" in ctx.room.name.lower()
-        or (ctx.room.metadata and "outbound" in ctx.room.metadata.lower())
+    # Register Shutdown Callback for Day 8 Call Analytics
+    async def _on_shutdown():
+        duration = int(time.time() - start_time)
+        status = "success" if assistant.exercises_completed >= 1 else "failed"
+        reason = (
+            None
+            if status == "success"
+            else ("opted_out" if assistant.was_opted_out else "incomplete_task")
+        )
+        logger.info(
+            f"Call finished [{room_name}] - Status: {status}, Exercises: {assistant.exercises_completed}, Duration: {duration}s"
+        )
+        record_call_end(
+            call_id=room_name,
+            status=status,
+            failure_reason=reason,
+            exercises_completed=assistant.exercises_completed,
+            duration_seconds=duration,
+        )
+
+    ctx.add_shutdown_callback(_on_shutdown)
+
+    await session.start(
+        agent=assistant,
+        room=ctx.room,
     )
 
     if is_outbound:

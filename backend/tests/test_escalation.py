@@ -7,7 +7,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from database import (
     _get_connection,
     create_escalation_request,
-    get_open_escalations,
     get_escalation_by_id,
     sanitize_summary,
 )

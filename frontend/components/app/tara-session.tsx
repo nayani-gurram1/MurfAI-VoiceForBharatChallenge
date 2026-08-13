@@ -70,7 +70,7 @@ export function TaraSessionView() {
           <Link
             href="/escalations"
             target="_blank"
-            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/60 font-semibold transition flex items-center gap-1.5"
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-700/60 bg-indigo-950/80 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-900"
           >
             <span>👩‍🏫</span> Human Help Desk (Day 7)
           </Link>

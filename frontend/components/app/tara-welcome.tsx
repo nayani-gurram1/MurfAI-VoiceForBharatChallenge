@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -109,36 +109,79 @@ export function TaraWelcome({ onStartCall }: TaraWelcomeProps) {
           <span className="pill">🤗 Never Judges</span>
         </div>
 
-        {/* CTA Button */}
-        <button
-          onClick={handleStart}
-          disabled={isConnecting}
-          className="tara-btn"
-          id="start-reading-btn"
+        {/* CTA Buttons Row */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'center',
+            alignItems: 'center',
+            margin: '20px 0',
+            flexWrap: 'wrap',
+          }}
         >
-          {isConnecting ? (
-            <>
-              <Loader2
-                className="animate-spin"
-                style={{ width: 20, height: 20, display: 'inline', marginRight: 8 }}
-              />
-              Connecting to Tara...
-            </>
-          ) : (
-            <>
-              <span style={{ marginRight: 8 }}>🎙️</span>
-              Start Reading with Tara
-            </>
-          )}
-        </button>
+          <button
+            onClick={handleStart}
+            disabled={isConnecting}
+            className="tara-btn"
+            id="start-reading-btn"
+            style={{ margin: 0 }}
+          >
+            {isConnecting ? (
+              <>
+                <Loader2
+                  className="animate-spin"
+                  style={{ width: 20, height: 20, display: 'inline', marginRight: 8 }}
+                />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <span style={{ marginRight: 8 }}>🎙️</span>
+                Start Call with Tara
+              </>
+            )}
+          </button>
 
-        {/* Day 7 Help Desk Link */}
-        <Link
-          href="/escalations"
-          className="block text-center text-xs text-neutral-400 hover:text-indigo-400 font-medium py-1 transition"
-        >
-          👩‍🏫 Teacher Help Desk (Day 7 Open Escalations) →
-        </Link>
+          <Link
+            href="/dashboard"
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#fff',
+              padding: '12px 20px',
+              borderRadius: '10px',
+              textDecoration: 'none',
+              fontWeight: '600',
+              fontSize: '13px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            📊 View Call Analytics Section
+          </Link>
+
+          <Link
+            href="/escalations"
+            style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#ef4444',
+              padding: '12px 20px',
+              borderRadius: '10px',
+              textDecoration: 'none',
+              fontWeight: '600',
+              fontSize: '13px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            🚨 Human Escalations
+          </Link>
+        </div>
 
         {/* Mic tip */}
         <p className="tara-mic-tip">
