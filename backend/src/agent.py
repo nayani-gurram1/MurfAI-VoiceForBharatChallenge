@@ -28,6 +28,7 @@ from database import (
 from database import (
     opt_out_student as db_opt_out_student,
 )
+from maths_agent import MathsSpecialist
 from prompt import SYSTEM_PROMPT
 from tools import fetch_reading_exercise, lookup_word_meaning
 
@@ -280,6 +281,35 @@ class Assistant(Agent):
             f"Human help request created! Reference ID: {ref_id}. "
             f"Inform the user: 'I have submitted your request (Reference ID: {ref_id}) to the VoiceForBharat teacher support team. "
             f"A teacher will review it within 24 to 48 hours. In the meantime, we can continue practicing whenever you feel ready!'"
+        )
+
+    # ── Day 9: Specialist Agent Handoff tool ──────────────────────────────
+
+    @function_tool
+    async def transfer_to_maths_specialist(
+        self,
+        context: RunContext,
+    ):
+        """Transfer the student to Ganit, the Maths Practice Specialist.
+        Call this tool when the student asks for:
+        - Maths practice or numbers ("maths karo", "numbers practice", "can we do maths?")
+        - Counting, addition, subtraction practice
+        - Any arithmetic questions beyond what a reading buddy should handle
+
+        Do NOT call this for reading, phonics, vocabulary, or pronunciation requests.
+        Before calling this tool, say: 'मैं आपको Ganit से connect करती हूँ, our maths specialist! One moment!'
+        """
+        logger.info(
+            f"Handing off to MathsSpecialist for student: {self.identified_name} ({self.identified_user})"
+        )
+        specialist = MathsSpecialist(
+            student_name=self.identified_name,
+            student_level="beginner",
+        )
+        await context.session.update_agent(specialist)
+        return (
+            f"HANDOFF COMPLETE. Student '{self.identified_name}' has been connected to Ganit, "
+            f"the Maths Practice Specialist. Ganit will introduce themselves and start maths practice."
         )
 
 

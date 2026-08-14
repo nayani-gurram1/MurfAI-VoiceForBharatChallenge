@@ -584,17 +584,33 @@ def get_call_analytics() -> dict:
             "Phonics & Word Reading": max(cat_phonics, 1 if total_calls > 0 else 0),
             "General Reading Advisory": cat_advisory,
             "Human Teacher Escalation": cat_escalation,
-            "Dictionary Word Lookup": max(1, total_calls // 4) if total_calls > 0 else 0,
-            "Student Memory Profile": max(1, total_calls // 5) if total_calls > 0 else 0,
+            "Dictionary Word Lookup": max(1, total_calls // 4)
+            if total_calls > 0
+            else 0,
+            "Student Memory Profile": max(1, total_calls // 5)
+            if total_calls > 0
+            else 0,
         }
 
         # Duration distribution
-        d_30 = conn.execute("SELECT COUNT(*) FROM call_logs WHERE duration_seconds < 30").fetchone()[0]
-        d_60 = conn.execute("SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 30 AND duration_seconds < 60").fetchone()[0]
-        d_120 = conn.execute("SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 60 AND duration_seconds < 120").fetchone()[0]
-        d_300 = conn.execute("SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 120 AND duration_seconds < 300").fetchone()[0]
-        d_600 = conn.execute("SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 300 AND duration_seconds < 600").fetchone()[0]
-        d_max = conn.execute("SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 600").fetchone()[0]
+        d_30 = conn.execute(
+            "SELECT COUNT(*) FROM call_logs WHERE duration_seconds < 30"
+        ).fetchone()[0]
+        d_60 = conn.execute(
+            "SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 30 AND duration_seconds < 60"
+        ).fetchone()[0]
+        d_120 = conn.execute(
+            "SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 60 AND duration_seconds < 120"
+        ).fetchone()[0]
+        d_300 = conn.execute(
+            "SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 120 AND duration_seconds < 300"
+        ).fetchone()[0]
+        d_600 = conn.execute(
+            "SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 300 AND duration_seconds < 600"
+        ).fetchone()[0]
+        d_max = conn.execute(
+            "SELECT COUNT(*) FROM call_logs WHERE duration_seconds >= 600"
+        ).fetchone()[0]
 
         duration_distribution = {
             "<30s": d_30,
@@ -607,14 +623,36 @@ def get_call_analytics() -> dict:
 
         # Tool Telemetry Data
         tools_telemetry = [
-            {"tool_name": "get_reading_exercise", "executions": max(total_calls * 2, 4), "avg_latency_ms": 120, "status": "Optimal"},
-            {"tool_name": "lookup_word_meaning", "executions": max(total_calls // 2, 2), "avg_latency_ms": 185, "status": "Optimal"},
-            {"tool_name": "lookup_student", "executions": max(total_calls, 3), "avg_latency_ms": 45, "status": "Active"},
-            {"tool_name": "create_escalation_request", "executions": cat_escalation, "avg_latency_ms": 65, "status": "Optimal" if cat_escalation > 0 else "Active"},
+            {
+                "tool_name": "get_reading_exercise",
+                "executions": max(total_calls * 2, 4),
+                "avg_latency_ms": 120,
+                "status": "Optimal",
+            },
+            {
+                "tool_name": "lookup_word_meaning",
+                "executions": max(total_calls // 2, 2),
+                "avg_latency_ms": 185,
+                "status": "Optimal",
+            },
+            {
+                "tool_name": "lookup_student",
+                "executions": max(total_calls, 3),
+                "avg_latency_ms": 45,
+                "status": "Active",
+            },
+            {
+                "tool_name": "create_escalation_request",
+                "executions": cat_escalation,
+                "avg_latency_ms": 65,
+                "status": "Optimal" if cat_escalation > 0 else "Active",
+            },
         ]
 
         # Escalation count
-        open_escalations = conn.execute("SELECT COUNT(*) FROM escalations WHERE status = 'open'").fetchone()[0]
+        open_escalations = conn.execute(
+            "SELECT COUNT(*) FROM escalations WHERE status = 'open'"
+        ).fetchone()[0]
 
         return {
             "total_calls": total_calls,
